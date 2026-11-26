@@ -249,12 +249,12 @@ def show_results(result) -> None:
     c2.markdown("**❌ Missing:** " + _chips(result.missing_keywords, "red"))
 
     with st.expander("Full skill-by-skill table"):
-        st.dataframe(
-            [{"Skill": s.name, "Category": s.category,
-              "Importance": "Required" if s.required else "Nice-to-have",
-              "In resume": "✅" if s.found else "❌"} for s in result.skills],
-            hide_index=True, width="stretch",
-        )
+        # Plain markdown table: st.dataframe would load pandas + pyarrow
+        # (2-3 s the first time results are shown).
+        rows = ["| Skill | Category | Importance | In resume |", "|---|---|---|---|"]
+        rows += [f"| {s.name} | {s.category} | {'Required' if s.required else 'Nice-to-have'} | "
+                 f"{'✅' if s.found else '❌'} |" for s in result.skills]
+        st.markdown("\n".join(rows) if result.skills else "_No known skills found in the job description._")
 
     st.subheader("💡 Suggestions")
     if not result.suggestions:

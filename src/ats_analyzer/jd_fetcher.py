@@ -22,6 +22,12 @@ HEADERS = {
 }
 
 
+# One shared session keeps connections open, so fetching another job from the
+# same site skips the DNS + TLS handshake (often 0.5-1 s).
+_SESSION = requests.Session()
+_SESSION.headers.update(HEADERS)
+
+
 class JobFetchError(ValueError):
     """Raised when a job description can't be fetched. Message is user-friendly."""
 
@@ -33,7 +39,7 @@ def fetch_job_description(url: str, timeout: int = 15) -> str:
         raise JobFetchError("Please enter a full link starting with http:// or https://")
 
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=timeout, stream=True)
+        resp = _SESSION.get(url, timeout=timeout, stream=True)
         content = resp.raw.read(MAX_BYTES + 1, decode_content=True)
     except requests.RequestException as exc:
         raise JobFetchError(f"Could not open the link: {exc.__class__.__name__}") from exc
