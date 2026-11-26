@@ -10,8 +10,36 @@ import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 from ats_analyzer import analyze  # noqa: E402
+from ats_analyzer.parser import (  # noqa: E402
+    SUPPORTED_EXTENSIONS,
+    DocumentError,
+    extract_text_from_bytes,
+)
 
 st.set_page_config(page_title="ATS Resume Analyzer", page_icon="📄", layout="wide")
+
+
+def resume_input(key: str) -> str:
+    """Let the user upload a resume file (any supported format) or paste text."""
+    mode = st.radio("Resume source", ["Upload file", "Paste text"], horizontal=True, key=f"{key}_mode")
+    if mode == "Paste text":
+        return st.text_area("Resume text", height=250, key=f"{key}_text")
+
+    uploaded = st.file_uploader(
+        "Upload resume (" + ", ".join(SUPPORTED_EXTENSIONS) + ")",
+        type=SUPPORTED_EXTENSIONS,
+        key=f"{key}_file",
+    )
+    if not uploaded:
+        return ""
+    try:
+        text = extract_text_from_bytes(uploaded.getvalue(), uploaded.name)
+    except DocumentError as exc:
+        st.error(str(exc))
+        return ""
+    with st.expander(f"Text read from {uploaded.name} ({len(text.split())} words)"):
+        st.text(text)
+    return text
 
 
 def sidebar() -> None:
@@ -34,7 +62,8 @@ def analyze_tab() -> None:
     st.header("Analyze your resume")
     col1, col2 = st.columns(2)
     with col1:
-        resume_text = st.text_area("Resume text", height=300)
+        st.subheader("1. Your resume")
+        resume_text = resume_input("analyze")
     with col2:
         job_text = st.text_area("Job description", height=300)
 
