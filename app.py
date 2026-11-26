@@ -111,13 +111,64 @@ def analyze_tab() -> None:
         if not resume_text.strip() or not job_text.strip():
             st.warning("Please provide both a resume and a job description.")
             return
-        result = analyze(resume_text, job_text)
+        show_results(analyze(resume_text, job_text))
+
+
+def _chips(items: list[str], color: str) -> str:
+    return " ".join(f":{color}-background[{i}]" for i in items) if items else "_None_"
+
+
+def show_results(result) -> None:
+    st.divider()
+    if result.score >= 75:
+        verdict, color = "Strong match - good chance of passing ATS filters", "green"
+    elif result.score >= 50:
+        verdict, color = "Moderate match - improve the items below", "orange"
+    else:
+        verdict, color = "Weak match - resume needs tailoring for this job", "red"
+
+    c1, c2 = st.columns([1, 2])
+    with c1:
         st.metric("ATS Score", f"{result.score} / 100")
-        st.progress(result.score / 100)
-        st.write("**Matched:**", ", ".join(result.matched_keywords) or "None")
-        st.write("**Missing:**", ", ".join(result.missing_keywords) or "None")
-        for tip in result.suggestions:
-            st.write(f"- {tip}")
+        st.markdown(f":{color}[**{verdict}**]")
+    with c2:
+        st.markdown("**Score breakdown**")
+        for part in result.parts:
+            st.progress(part.score / 100, text=f"{part.name} ({part.weight}%): {part.score}/100 - {part.detail}")
+
+    st.subheader("Skills")
+    req = [s for s in result.skills if s.required]
+    pref = [s for s in result.skills if not s.required]
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("**✅ Matched skills**")
+        st.markdown("Required: " + _chips([s.name for s in req if s.found], "green"))
+        st.markdown("Nice-to-have: " + _chips([s.name for s in pref if s.found], "green"))
+    with c2:
+        st.markdown("**❌ Missing skills**")
+        st.markdown("Required: " + _chips([s.name for s in req if not s.found], "red"))
+        st.markdown("Nice-to-have: " + _chips([s.name for s in pref if not s.found], "orange"))
+    if result.extra_skills:
+        st.caption("Other skills on your resume (not asked for in this job): " + ", ".join(result.extra_skills))
+
+    st.subheader("Keywords")
+    c1, c2 = st.columns(2)
+    c1.markdown("**✅ Matched:** " + _chips(result.matched_keywords, "green"))
+    c2.markdown("**❌ Missing:** " + _chips(result.missing_keywords, "red"))
+
+    with st.expander("Full skill-by-skill table"):
+        st.dataframe(
+            [{"Skill": s.name, "Category": s.category,
+              "Importance": "Required" if s.required else "Nice-to-have",
+              "In resume": "✅" if s.found else "❌"} for s in result.skills],
+            hide_index=True, width="stretch",
+        )
+
+    st.subheader("💡 Suggestions")
+    if not result.suggestions:
+        st.success("Your resume covers this job well. Nice work!")
+    for tip in result.suggestions:
+        st.markdown(f"- {tip}")
 
 
 def build_tab() -> None:
