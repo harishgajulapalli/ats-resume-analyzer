@@ -44,35 +44,78 @@ def _banner_base64(modified: float) -> str:  # `modified` refreshes the cache wh
 
 
 def apply_background() -> None:
-    """Show the banner image at the top of the page, continue its dark-to-blue
-    gradient behind the rest of the app, and put the content on a readable card."""
+    """Banner image across the top, its blue continuing down the page, the
+    heading drawn as real (sharp) text over the banner, and the app content on
+    a dark translucent card."""
     image = _banner_base64(BANNER.stat().st_mtime) if BANNER.exists() else ""
     banner_css = f'url("data:image/png;base64,{image}") top center / 100% auto no-repeat,' if image else ""
     st.markdown(
         f"""
         <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600&display=swap');
+
         /* Starts with the banner's bottom-edge blue so there is no visible seam. */
         .stApp {{
-            background: linear-gradient(180deg, #206fa7 0, #206fa7 40vw, #0f3a5c 100%);
+            background: linear-gradient(180deg, #206fa7 0, #206fa7 40vw, #0b2540 100%);
         }}
-        /* Banner fills the width of the main area (right of the sidebar) and
-           scrolls with the page. */
+        /* Banner fills the page width and scrolls with the page. */
         .stApp [data-testid="stMain"] {{
             background: {banner_css} transparent;
             background-attachment: local;
             container-type: inline-size;
         }}
-        /* Push content below the banner (banner height = 413/1166 of its width). */
         .stApp [data-testid="stMainBlockContainer"] {{
-            margin: calc(35.4cqw - 2.5rem) 1.5rem 2rem;
-            width: auto;
-            background: rgba(255, 255, 255, 0.94);
-            border-radius: 16px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
-            padding: 2rem 2.5rem;
+            padding: 0 1.5rem 2rem;
+            max-width: none;
         }}
         .stApp header[data-testid="stHeader"] {{ background: transparent; }}
+
+        /* Heading over the banner. Sizes scale with page width (cqw) so it
+           lines up with the image at any screen size. */
+        .hero {{
+            height: calc(35.4cqw - 3rem);
+            min-height: 150px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding-bottom: 4cqw;
+            text-align: center;
+            font-family: 'Montserrat', 'Segoe UI', sans-serif;
+            color: #ffffff;
+            text-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+        }}
+        .hero .kicker {{ font-weight: 300; font-size: clamp(16px, 2.7cqw, 44px); margin: 0; }}
+        .hero h1 {{
+            font-family: inherit; font-weight: 600; color: #ffffff;
+            font-size: clamp(26px, 5cqw, 84px); line-height: 1.15; margin: 0.3em 0; padding: 0;
+        }}
+        .hero .tagline {{
+            font-weight: 400; color: #dbe8f5;
+            font-size: clamp(12px, 1.45cqw, 24px); line-height: 1.5; margin: 0;
+        }}
+        /* Hide the link icon Streamlit adds to headings. */
+        .hero h1 a, .hero [data-testid="stHeaderActionElements"] {{ display: none; }}
+
+        /* Main content card: dark navy glass that matches the banner. */
+        .st-key-card {{
+            background: rgba(8, 22, 38, 0.82);
+            border: 1px solid rgba(110, 180, 240, 0.25);
+            border-radius: 18px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+            backdrop-filter: blur(10px);
+            padding: 2rem 2.5rem;
+            max-width: 1300px;
+            margin: 0 auto;
+        }}
+        @media (max-width: 640px) {{ .st-key-card {{ padding: 1.25rem 1rem; }} }}
         </style>
+        <div class="hero">
+            <p class="kicker">Deep Dive Into</p>
+            <h1>AI Resume Analyzer</h1>
+            <p class="tagline">How does it actually work? We break down the tech<br>
+            so you can ace every job application.</p>
+        </div>
         """,
         unsafe_allow_html=True,
     )
@@ -137,22 +180,6 @@ def job_input(key: str) -> str:
     # Show the fetched text in an editable box so the user can trim it.
     st.success(f"Job description loaded ({len(text.split())} words). You can edit it below.")
     return st.text_area("Job description (editable)", value=text, height=250, key=f"{key}_jd_loaded_{hash(text)}")
-
-
-def sidebar() -> None:
-    with st.sidebar:
-        st.title("📄 ATS Resume Analyzer")
-        st.write(
-            "Applicant Tracking Systems (ATS) filter resumes by keywords before a "
-            "human reads them. This tool shows how your resume looks to an ATS."
-        )
-        st.markdown(
-            "**How to use**\n"
-            "1. Add your resume\n"
-            "2. Add the job description\n"
-            "3. Click **Analyze**\n"
-            "4. Or build a tailored resume in the *Build Resume* tab"
-        )
 
 
 def analyze_tab() -> None:
@@ -379,12 +406,12 @@ def show_built_resume(resume, job_text: str) -> None:
 
 def main() -> None:
     apply_background()
-    sidebar()
-    tab_analyze, tab_build = st.tabs(["🔍 Analyze Resume", "🛠️ Build Resume"])
-    with tab_analyze:
-        analyze_tab()
-    with tab_build:
-        build_tab()
+    with st.container(key="card"):
+        tab_analyze, tab_build = st.tabs(["🔍 Analyze Resume", "🛠️ Build Resume"])
+        with tab_analyze:
+            analyze_tab()
+        with tab_build:
+            build_tab()
 
 
 main()
