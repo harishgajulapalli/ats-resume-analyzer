@@ -33,6 +33,50 @@ from ats_analyzer.skills import find_skills  # noqa: E402
 
 st.set_page_config(page_title="ATS Resume Analyzer", page_icon="📄", layout="wide")
 
+BANNER = Path(__file__).parent / "assets" / "banner.png"
+
+
+@st.cache_data
+def _banner_base64(modified: float) -> str:  # `modified` refreshes the cache when the image changes
+    import base64
+
+    return base64.b64encode(BANNER.read_bytes()).decode()
+
+
+def apply_background() -> None:
+    """Show the banner image at the top of the page, continue its dark-to-blue
+    gradient behind the rest of the app, and put the content on a readable card."""
+    image = _banner_base64(BANNER.stat().st_mtime) if BANNER.exists() else ""
+    banner_css = f'url("data:image/png;base64,{image}") top center / 100% auto no-repeat,' if image else ""
+    st.markdown(
+        f"""
+        <style>
+        /* Starts with the banner's bottom-edge blue so there is no visible seam. */
+        .stApp {{
+            background: linear-gradient(180deg, #206fa7 0, #206fa7 40vw, #0f3a5c 100%);
+        }}
+        /* Banner fills the width of the main area (right of the sidebar) and
+           scrolls with the page. */
+        .stApp [data-testid="stMain"] {{
+            background: {banner_css} transparent;
+            background-attachment: local;
+            container-type: inline-size;
+        }}
+        /* Push content below the banner (banner height = 413/1166 of its width). */
+        .stApp [data-testid="stMainBlockContainer"] {{
+            margin: calc(35.4cqw - 2.5rem) 1.5rem 2rem;
+            width: auto;
+            background: rgba(255, 255, 255, 0.94);
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+            padding: 2rem 2.5rem;
+        }}
+        .stApp header[data-testid="stHeader"] {{ background: transparent; }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
 
 def resume_input(key: str) -> str:
     """Let the user upload a resume file (any supported format) or paste text."""
@@ -334,6 +378,7 @@ def show_built_resume(resume, job_text: str) -> None:
 
 
 def main() -> None:
+    apply_background()
     sidebar()
     tab_analyze, tab_build = st.tabs(["🔍 Analyze Resume", "🛠️ Build Resume"])
     with tab_analyze:

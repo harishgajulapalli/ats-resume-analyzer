@@ -1,0 +1,4 @@
+# Light theme so text is dark on the white content card over the banner.
+[theme]
+base = "light"
+primaryColor = "#2a7ab8"
