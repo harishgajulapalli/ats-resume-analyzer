@@ -1,4 +1,9 @@
-streamlit>=1.40
-pypdf>=5.0
-python-docx>=1.1
-pytest>=8.0
+streamlit>=1.40        # web app
+pypdf>=5.0             # read PDF
+python-docx>=1.1       # read/write Word .docx
+striprtf>=0.0.26       # read RTF
+olefile>=0.47          # read old Word .doc
+requests>=2.31         # fetch job description links
+beautifulsoup4>=4.12   # read HTML / job pages
+fpdf2>=2.8             # write PDF resumes
+pytest>=8.0            # tests

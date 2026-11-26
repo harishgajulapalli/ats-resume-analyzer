@@ -16,6 +16,20 @@ from ats_analyzer.parser import (  # noqa: E402
     DocumentError,
     extract_text_from_bytes,
 )
+from ats_analyzer.resume_builder import (  # noqa: E402
+    Education,
+    Experience,
+    Profile,
+    Project,
+    guess_job_title,
+    prefill_from_resume,
+    tailor,
+    to_docx,
+    to_markdown,
+    to_pdf,
+    to_text,
+)
+from ats_analyzer.skills import find_skills  # noqa: E402
 
 st.set_page_config(page_title="ATS Resume Analyzer", page_icon="📄", layout="wide")
 
@@ -171,9 +185,152 @@ def show_results(result) -> None:
         st.markdown(f"- {tip}")
 
 
+def _lines(text: str) -> list[str]:
+    return [line.strip() for line in text.splitlines() if line.strip()]
+
+
+def _csv(text: str) -> list[str]:
+    return [x.strip() for x in text.split(",") if x.strip()]
+
+
 def build_tab() -> None:
     st.header("Build a resume from a job description")
-    st.info("Coming in Step 5.")
+    st.caption(
+        "Fill in your real details. The tool tailors wording, order and emphasis to the job "
+        "and only includes skills you confirm you have."
+    )
+
+    st.subheader("1. Job description")
+    job_text = job_input("build")
+
+    st.subheader("2. Your current resume (optional)")
+    with st.expander("Upload your existing resume to pre-fill name, contact and skills"):
+        old_resume = resume_input("build")
+    pre = prefill_from_resume(old_resume) if old_resume.strip() else {}
+    pk = str(abs(hash(old_resume)) % 10**8)  # new keys when a new resume is uploaded
+
+    if not job_text.strip():
+        st.info("Add a job description above to start building.")
+        return
+
+    # ---- personal details ----
+    st.subheader("3. Your details")
+    c1, c2, c3 = st.columns(3)
+    name = c1.text_input("Full name *", value=pre.get("name", ""), key=f"b_name_{pk}")
+    email = c2.text_input("Email *", value=pre.get("email", ""), key=f"b_email_{pk}")
+    phone = c3.text_input("Phone *", value=pre.get("phone", ""), key=f"b_phone_{pk}")
+    c1, c2, c3 = st.columns(3)
+    location = c1.text_input("Location", placeholder="City, Country", key="b_location")
+    links = c2.text_input("Links (comma separated)", value=", ".join(pre.get("links", [])),
+                          placeholder="linkedin.com/in/you, github.com/you", key=f"b_links_{pk}")
+    title = c3.text_input("Target job title", value=guess_job_title(job_text), key="b_title")
+
+    # ---- skills ----
+    st.subheader("4. Skills")
+    job_skills = find_skills(job_text)
+    have = set(pre.get("skills", []))
+    st.write("These skills are in the job description. **Keep only the ones you really have:**")
+    chosen = st.multiselect(
+        "Job skills you have", options=sorted(job_skills),
+        default=sorted(s for s in job_skills if s in have), key=f"b_skills_{pk}",
+    )
+    other = st.text_input(
+        "Other skills you have (comma separated)",
+        value=", ".join(sorted(have - set(job_skills))), key=f"b_other_{pk}",
+    )
+    skills = chosen + [s for s in _csv(other) if s not in chosen]
+
+    # ---- experience ----
+    st.subheader("5. Experience")
+    n_exp = st.number_input("Number of jobs / internships", 0, 8, 1, key="b_n_exp")
+    experience = []
+    for i in range(int(n_exp)):
+        with st.expander(f"Job {i + 1}", expanded=(i == 0)):
+            c1, c2 = st.columns(2)
+            job_title = c1.text_input("Job title", key=f"b_exp_title_{i}")
+            company = c2.text_input("Company", key=f"b_exp_company_{i}")
+            c1, c2, c3 = st.columns(3)
+            start = c1.text_input("Start (e.g. Jan 2022)", key=f"b_exp_start_{i}")
+            end = c2.text_input("End (e.g. Present)", key=f"b_exp_end_{i}")
+            loc = c3.text_input("Location", key=f"b_exp_loc_{i}")
+            bullets = st.text_area(
+                "What you did - one point per line. Start with an action verb and add numbers "
+                "(e.g. 'Built REST APIs in Django serving 1M requests/day')",
+                key=f"b_exp_bullets_{i}", height=120,
+            )
+            experience.append(Experience(job_title, company, start, end, loc, _lines(bullets)))
+
+    # ---- projects ----
+    st.subheader("6. Projects")
+    n_proj = st.number_input("Number of projects", 0, 6, 0, key="b_n_proj")
+    projects = []
+    for i in range(int(n_proj)):
+        with st.expander(f"Project {i + 1}", expanded=True):
+            c1, c2 = st.columns(2)
+            pname = c1.text_input("Project name", key=f"b_proj_name_{i}")
+            tech = c2.text_input("Technologies used", key=f"b_proj_tech_{i}")
+            pbul = st.text_area("Description - one point per line", key=f"b_proj_bullets_{i}", height=90)
+            projects.append(Project(pname, tech, _lines(pbul)))
+
+    # ---- education & certifications ----
+    st.subheader("7. Education & certifications")
+    n_edu = st.number_input("Number of degrees", 0, 4, 1, key="b_n_edu")
+    education = []
+    for i in range(int(n_edu)):
+        c1, c2, c3 = st.columns([2, 2, 1])
+        degree = c1.text_input("Degree", placeholder="B.Tech in Computer Science", key=f"b_edu_degree_{i}")
+        school = c2.text_input("College / University", key=f"b_edu_school_{i}")
+        year = c3.text_input("Year", key=f"b_edu_year_{i}")
+        education.append(Education(degree, school, year))
+    certs = st.text_area("Certifications - one per line (optional)", key="b_certs", height=80)
+
+    st.subheader("8. Summary")
+    summary = st.text_area("Write your own summary, or leave empty to auto-generate one", key="b_summary")
+
+    # Honest tip: skills claimed but never shown in any bullet point.
+    all_bullets = " ".join(b for e in experience for b in e.bullets) + " " + \
+        " ".join(b for p in projects for b in [p.tech, *p.bullets])
+    unshown = [s for s in chosen if s not in find_skills(all_bullets)]
+    if chosen and unshown and all_bullets.strip():
+        st.info("Tip: ATS and recruiters trust skills more when a bullet point shows where you used them. "
+                "Consider mentioning: " + ", ".join(unshown))
+
+    if st.button("✨ Generate tailored resume", type="primary", key="b_generate"):
+        missing = [label for label, v in [("Full name", name), ("Email", email), ("Phone", phone)] if not v.strip()]
+        if missing:
+            st.warning("Please fill in: " + ", ".join(missing))
+            return
+        profile = Profile(
+            name=name, email=email, phone=phone, location=location, links=_csv(links), title=title,
+            summary=summary, skills=skills, experience=experience, education=education,
+            projects=projects, certifications=_lines(certs),
+        )
+        st.session_state["built_resume"] = tailor(profile, job_text)
+        st.session_state["built_for_job"] = job_text
+
+    resume = st.session_state.get("built_resume")
+    if resume and st.session_state.get("built_for_job") == job_text:
+        show_built_resume(resume, job_text)
+
+
+def show_built_resume(resume, job_text: str) -> None:
+    st.divider()
+    st.subheader("Your tailored resume")
+    result = analyze(to_text(resume), job_text)
+    c1, c2 = st.columns([1, 3])
+    c1.metric("ATS Score of new resume", f"{result.score} / 100")
+    if result.missing_skills:
+        c2.markdown("Job skills still missing (add only if true): " + _chips(result.missing_skills, "red"))
+
+    safe_name = "".join(ch for ch in resume.name if ch.isalnum()) or "resume"
+    c1, c2, c3 = st.columns(3)
+    c1.download_button("⬇️ Download Word (.docx)", to_docx(resume), f"{safe_name}_Resume.docx",
+                       "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    c2.download_button("⬇️ Download PDF", to_pdf(resume), f"{safe_name}_Resume.pdf", "application/pdf")
+    c3.download_button("⬇️ Download text (.txt)", to_text(resume), f"{safe_name}_Resume.txt", "text/plain")
+
+    with st.container(border=True):
+        st.markdown(to_markdown(resume))
 
 
 def main() -> None:
