@@ -9,3 +9,10 @@ textColor = "#e6f1fb"
 [client]
 # Hide the "Deploy" button and developer menu.
 toolbarMode = "minimal"
+
+[server]
+# Serve ./static (banner image, font) as normal cacheable files at /app/static/.
+enableStaticServing = true
+
+[browser]
+gatherUsageStats = false

@@ -27,6 +27,8 @@ ats-resume-analyzer/
 │   └── resume_builder.py       # Step 5: tailor + export resume
 ├── tests/                      # automated tests (pytest)
 ├── samples/                    # sample resume and job description
+├── static/                     # banner image + font (served as cacheable files)
+├── .streamlit/config.toml      # theme and static file serving
 └── requirements.txt            # Python libraries needed
 ```
 

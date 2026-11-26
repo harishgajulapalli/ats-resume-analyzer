@@ -33,26 +33,33 @@ from ats_analyzer.skills import find_skills  # noqa: E402
 
 st.set_page_config(page_title="ATS Resume Analyzer", page_icon="📄", layout="wide")
 
-BANNER = Path(__file__).parent / "assets" / "banner.png"
+# Image and font are served as normal files from ./static (enabled in
+# .streamlit/config.toml) so the browser downloads them once and caches them,
+# instead of re-sending them inside the page on every refresh.
+BANNER_URL = "app/static/banner.webp"
+FONT_URL = "app/static/fonts/montserrat-latin.woff2"
 
 
-@st.cache_data
-def _banner_base64(modified: float) -> str:  # `modified` refreshes the cache when the image changes
-    import base64
-
-    return base64.b64encode(BANNER.read_bytes()).decode()
+@st.cache_data(show_spinner=False, max_entries=20)
+def _read_document(data: bytes, filename: str) -> str:
+    """Parse an uploaded file once; later reruns reuse the result."""
+    return extract_text_from_bytes(data, filename)
 
 
 def apply_background() -> None:
     """Banner image across the top, its blue continuing down the page, the
     heading drawn as real (sharp) text over the banner, and the app content on
-    a dark translucent card."""
-    image = _banner_base64(BANNER.stat().st_mtime) if BANNER.exists() else ""
-    banner_css = f'url("data:image/png;base64,{image}") top center / 100% auto no-repeat,' if image else ""
+    a dark card."""
+    banner_css = f'url("{BANNER_URL}") top center / 100% auto no-repeat,'
     st.markdown(
         f"""
         <style>
-        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600&display=swap');
+        @font-face {{
+            font-family: 'Montserrat';
+            src: url("{FONT_URL}") format("woff2");
+            font-weight: 300 600;
+            font-display: swap;
+        }}
 
         /* Starts with the banner's bottom-edge blue so there is no visible seam. */
         .stApp {{
@@ -99,11 +106,11 @@ def apply_background() -> None:
 
         /* Main content card: dark navy glass that matches the banner. */
         .st-key-card {{
-            background: rgba(8, 22, 38, 0.82);
+            /* No backdrop blur: it forces constant repaints while scrolling. */
+            background: rgba(8, 22, 38, 0.9);
             border: 1px solid rgba(110, 180, 240, 0.25);
             border-radius: 18px;
             box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
-            backdrop-filter: blur(10px);
             padding: 2rem 2.5rem;
             max-width: 1300px;
             margin: 0 auto;
@@ -135,7 +142,7 @@ def resume_input(key: str) -> str:
     if not uploaded:
         return ""
     try:
-        text = extract_text_from_bytes(uploaded.getvalue(), uploaded.name)
+        text = _read_document(uploaded.getvalue(), uploaded.name)
     except DocumentError as exc:
         st.error(str(exc))
         return ""
@@ -172,7 +179,7 @@ def job_input(key: str) -> str:
         if not uploaded:
             return ""
         try:
-            text = extract_text_from_bytes(uploaded.getvalue(), uploaded.name)
+            text = _read_document(uploaded.getvalue(), uploaded.name)
         except DocumentError as exc:
             st.error(str(exc))
             return ""
@@ -384,10 +391,17 @@ def build_tab() -> None:
         show_built_resume(resume, job_text)
 
 
+@st.cache_data(show_spinner=False, max_entries=10)
+def _export_resume(resume) -> dict:
+    """Build the Word/PDF/text files once per resume instead of on every click."""
+    return {"docx": to_docx(resume), "pdf": to_pdf(resume), "txt": to_text(resume)}
+
+
 def show_built_resume(resume, job_text: str) -> None:
     st.divider()
     st.subheader("Your tailored resume")
-    result = analyze(to_text(resume), job_text)
+    files = _export_resume(resume)
+    result = analyze(files["txt"], job_text)
     c1, c2 = st.columns([1, 3])
     c1.metric("ATS Score of new resume", f"{result.score} / 100")
     if result.missing_skills:
@@ -395,10 +409,10 @@ def show_built_resume(resume, job_text: str) -> None:
 
     safe_name = "".join(ch for ch in resume.name if ch.isalnum()) or "resume"
     c1, c2, c3 = st.columns(3)
-    c1.download_button("⬇️ Download Word (.docx)", to_docx(resume), f"{safe_name}_Resume.docx",
+    c1.download_button("⬇️ Download Word (.docx)", files["docx"], f"{safe_name}_Resume.docx",
                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-    c2.download_button("⬇️ Download PDF", to_pdf(resume), f"{safe_name}_Resume.pdf", "application/pdf")
-    c3.download_button("⬇️ Download text (.txt)", to_text(resume), f"{safe_name}_Resume.txt", "text/plain")
+    c2.download_button("⬇️ Download PDF", files["pdf"], f"{safe_name}_Resume.pdf", "application/pdf")
+    c3.download_button("⬇️ Download text (.txt)", files["txt"], f"{safe_name}_Resume.txt", "text/plain")
 
     with st.container(border=True):
         st.markdown(to_markdown(resume))
