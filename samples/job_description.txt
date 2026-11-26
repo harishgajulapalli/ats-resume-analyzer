@@ -1,0 +1,12 @@
+Backend Python Developer
+
+We are looking for a Python developer to build REST APIs using Django and FastAPI.
+You will design PostgreSQL databases, write unit tests with pytest, and deploy
+services on AWS using Docker and CI/CD pipelines.
+
+Requirements:
+- 3+ years of Python development
+- Experience with Django or FastAPI
+- Strong SQL and PostgreSQL skills
+- Docker, AWS, and CI/CD pipelines
+- Git and code review practices
